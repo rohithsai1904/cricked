@@ -3,21 +3,8 @@ const router = express.Router()
 const passport = require('../config/passport')
 const jwt = require('jsonwebtoken')
 const User = require('../models/User')
-require('dotenv').config()
-
-const authMiddleware = require('../middleware/auth')
-
-// GET /auth/me — get current user from token
-router.get('/me', authMiddleware, async (req, res) => {
-    try {
-        const user = await User.findById(req.user.userId).select('-passwordHash')
-        if (!user) return res.status(404).json({ error: 'User not found' })
-        res.json(user)
-    } catch (err) {
-        console.error(err)
-        res.status(500).json({ error: 'Server error' })
-    }
-})
+const path = require('path')
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') })
 
 // Step 1 — redirect user to Google
 router.get('/google',
@@ -52,5 +39,18 @@ router.get('/google/callback',
         }
     }
 )
+
+// GET /auth/me — current user profile
+const authMiddleware = require('../middleware/auth')
+router.get('/me', authMiddleware, async (req, res) => {
+    try {
+        const user = await User.findById(req.user.userId).select('-passwordHash')
+        if (!user) return res.status(404).json({ error: 'User not found' })
+        res.json(user)
+    } catch (err) {
+        console.error(err)
+        res.status(500).json({ error: 'Server error' })
+    }
+})
 
 module.exports = router

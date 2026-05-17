@@ -3,6 +3,7 @@ const mongoose = require('mongoose')
 const userSchema = new mongoose.Schema({
     googleId: { type: String, unique: true, sparse: true },
     email: { type: String, required: true, unique: true },
+    displayName: { type: String, required: true },
     username: { type: String, required: true, unique: true },
     passwordHash: { type: String },       // optional — only for email signup
     pointsTotal: { type: Number, default: 0 },

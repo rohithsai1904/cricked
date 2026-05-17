@@ -24,10 +24,11 @@ passport.use(
                         .slice(0, 20)
                     const suffix = Math.random().toString(36).slice(2, 6)
                     const username = `${baseName}_${suffix}`
-
+                    const displayName = profile.displayName
                     user = await User.create({
                         googleId: profile.id,
                         email: profile.emails[0].value,
+                        displayName,
                         username
                     })
                 }

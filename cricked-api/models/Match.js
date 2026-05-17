@@ -3,12 +3,16 @@ const mongoose = require('mongoose')
 const playerSchema = new mongoose.Schema({
     playerId: String,
     playerName: String,
-    role: String        // batsman / bowler / allrounder / wicketkeeper
+    role: String
 })
 
 const matchSchema = new mongoose.Schema({
+    cricapiId: { type: String, unique: true, sparse: true },
     teamHome: { type: String, required: true },
     teamAway: { type: String, required: true },
+    teamHomeImg: { type: String, default: '' },
+    teamAwayImg: { type: String, default: '' },
+    venue: { type: String, default: '' },
     squadHome: [playerSchema],
     squadAway: [playerSchema],
     playingXiHome: [playerSchema],

@@ -1,59 +1,27 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import './App.css'
-import { AuthProvider } from './context/AuthContext'
-import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import AuthCallback from './pages/AuthCallback'
-import MatchDetail from './pages/MatchDetail'
-import PreDraft from './pages/PreDraft'
+import Play from './pages/Play'
 import WaitingRoom from './pages/WaitingRoom'
-import LiveDraft from './pages/LiveDraft'
-import MatchResult from './pages/MatchResult'
-import Profile from './pages/Profile'
-import Leaderboard from './pages/Leaderboard'
-import Queue from './pages/Queue'
+import PreDraft from './pages/PreDraft'
+import RoomDetails from './pages/RoomDetails'
 
 function App() {
-  return (
-      <AuthProvider>
+    return (
         <BrowserRouter>
-          <Routes>
-            <Route path='/login' element={<Login />} />
-            <Route path='/auth/callback' element={<AuthCallback />} />
-            <Route path='/dashboard' element={
-              <ProtectedRoute><Dashboard /></ProtectedRoute>
-            } />
-            <Route path='/' element={
-              <ProtectedRoute><Dashboard /></ProtectedRoute>
-            } />
-            <Route path='/match/:matchId' element={
-              <ProtectedRoute><MatchDetail /></ProtectedRoute>
-            } />
-            <Route path='/predraft/:matchId' element={
-              <ProtectedRoute><PreDraft /></ProtectedRoute>
-            } />
-            <Route path='/room/:roomId' element={
-              <ProtectedRoute><WaitingRoom /></ProtectedRoute>
-            } />
-            <Route path='/draft/:roomId' element={
-              <ProtectedRoute><LiveDraft /></ProtectedRoute>
-            } />
-            <Route path='/result/:roomId' element={
-              <ProtectedRoute><MatchResult /></ProtectedRoute>
-            } />
-            <Route path='/queue/:matchId' element={
-              <ProtectedRoute><Queue /></ProtectedRoute>
-            } />
-            <Route path='/profile/:username' element={<Profile />} />
-            <Route path='/profile' element={
-              <ProtectedRoute><Profile /></ProtectedRoute>
-            } />
-            <Route path='/leaderboard' element={<Leaderboard />} />
-          </Routes>
+            <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/auth/callback" element={<AuthCallback />} />
+                <Route path="/play/:matchId" element={<Play />} />
+                <Route path="/room/:roomId" element={<WaitingRoom />} />
+                <Route path="/room/:roomId/predraft" element={<PreDraft />} />
+                <Route path="/match/:matchId/predraft" element={<PreDraft />} />
+                <Route path="/room/:roomId/details" element={<RoomDetails />} />
+            </Routes>
         </BrowserRouter>
-      </AuthProvider>
-  )
+    )
 }
 
 export default App

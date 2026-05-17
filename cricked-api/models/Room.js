@@ -6,7 +6,7 @@ const roomSchema = new mongoose.Schema({
     player1Id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     player2Id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     firstPickUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    roomType: { type: String, enum: ['friendly', 'daily_challenge'], default: 'friendly' },
+    roomType: { type: String, enum: ['friendly', 'random', 'daily_challenge'], default: 'friendly' },
     status: {
         type: String,
         enum: ['waiting', 'ready', 'drafting', 'completed'],
