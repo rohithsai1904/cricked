@@ -11,7 +11,12 @@ const roomSchema = new mongoose.Schema({
         type: String,
         enum: ['waiting', 'ready', 'drafting', 'completed'],
         default: 'waiting'
-    }
+    },
+    winnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    player1Score: { type: Number, default: 0 },
+    player2Score: { type: Number, default: 0 },
+    isDraw: { type: Boolean, default: false },
+    resultDeclared: { type: Boolean, default: false }
 }, { timestamps: true })
 
 module.exports = mongoose.model('Room', roomSchema)

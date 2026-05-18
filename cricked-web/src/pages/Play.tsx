@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../utils/api'
 
@@ -8,6 +8,17 @@ export default function Play() {
     const [inviteCode, setInviteCode] = useState('')
     const [loading, setLoading] = useState(false)
     const [mode, setMode] = useState<'choose' | 'join'>('choose')
+    const [locked, setLocked] = useState(false)
+
+    useEffect(() => {
+        api.get(`/matches/upcoming`).then(res => {
+            const match = res.data.find((m: any) => m._id === matchId)
+            if (match) {
+                const ms = new Date(match.startTime).getTime() - Date.now()
+                if (ms <= 5 * 60 * 1000) setLocked(true)
+            }
+        }).catch(() => {})
+    }, [matchId])
 
     const handleCreate = () => {
         navigate(`/match/${matchId}/predraft`, { state: { mode: 'create' } })
@@ -42,10 +53,16 @@ export default function Play() {
 
                 {mode === 'choose' && (
                     <>
+                        {locked && (
+                            <div className="text-center text-red-400 text-sm font-medium bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 mb-2">
+                                🔒 Match starts in less than 5 minutes — rooms are locked
+                            </div>
+                        )}
+
                         <button
                             onClick={handleCreate}
-                            disabled={loading}
-                            className="w-full bg-green-500 hover:bg-green-400 text-black font-semibold py-4 rounded-xl transition"
+                            disabled={loading || locked}
+                            className="w-full bg-green-500 hover:bg-green-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-semibold py-4 rounded-xl transition"
                         >
                             Create Room
                         </button>
@@ -59,8 +76,8 @@ export default function Play() {
 
                         <button
                             onClick={handleRandom}
-                            disabled={loading}
-                            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-4 rounded-xl transition"
+                            disabled={loading || locked}
+                            className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-xl transition"
                         >
                             Random Opponent
                         </button>

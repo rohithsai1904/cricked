@@ -26,12 +26,38 @@ const matchSchema = new mongoose.Schema({
     tossTime: Date,
     tossWinner: { type: String, default: '' },
     tossChoice: { type: String, default: '' },
+    draftOpensAt: { type: Date, default: null },
+    matchStarted: { type: Boolean, default: false },
+    matchEnded: { type: Boolean, default: false },
+    matchWinner: { type: String, default: '' },
+    matchStatusText: { type: String, default: '' },
     status: {
         type: String,
         enum: ['upcoming', 'drafting', 'live', 'completed'],
         default: 'upcoming'
     },
-    isDailyChallenge: { type: Boolean, default: false }
+    isDailyChallenge: { type: Boolean, default: false },
+    scorecardSynced: { type: Boolean, default: false },
+    battingStats: [{
+        playerId: String,
+        playerName: String,
+        runs: Number,
+        balls: Number,
+        fours: Number,
+        sixes: Number,
+        sr: Number,
+        inning: String
+    }],
+    bowlingStats: [{
+        playerId: String,
+        playerName: String,
+        overs: Number,
+        maidens: Number,
+        runs: Number,
+        wickets: Number,
+        eco: Number,
+        inning: String
+    }]
 }, { timestamps: true })
 
 module.exports = mongoose.model('Match', matchSchema)

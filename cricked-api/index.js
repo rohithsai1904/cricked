@@ -1,10 +1,17 @@
+require('dotenv').config()
+
+const Sentry = require('@sentry/node')
+Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV_DSN || 'development'
+})
+
 const express = require('express')
 const http = require('http')
 const { Server } = require('socket.io')
 const cors = require('cors')
 const passport = require('passport')
 const connectDB = require('./db')
-require('dotenv').config()
 
 const authRoutes = require('./routes/auth')
 const matchRoutes = require('./routes/matches')
@@ -31,6 +38,8 @@ app.use('/rooms', roomRoutes)
 app.get('/ping', (req, res) => {
     res.json({ message: 'Cricked API is alive' })
 })
+
+Sentry.setupExpressErrorHandler(app)
 
 setupDraft(io)
 

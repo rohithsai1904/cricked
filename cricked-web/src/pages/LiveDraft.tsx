@@ -30,6 +30,7 @@ interface Turn {
     totalInRound: number
     userId: string
     timeLimit?: number
+    isOnline?: boolean
 }
 
 const MAX_PER_TEAM: Record<string, number> = {
@@ -149,7 +150,7 @@ export default function LiveDraft() {
 
         socket.on('draft:turn', (turn: Turn) => {
             setCurrentTurn(turn)
-            const t = turn.timeLimit || 60
+            const t = turn.timeLimit || 30
             setTimer(t)
             setMaxTime(t)
         })
@@ -394,6 +395,12 @@ export default function LiveDraft() {
             </div>
 
             {/* Pick notification banner */}
+            {currentTurn && !isMyTurn && currentTurn.isOnline === false && (
+                <div className="px-4 py-2 bg-orange-500/20 border-b border-orange-500/20 text-center">
+                    <span className="text-xs text-orange-300">⚠️ Opponent is away — auto-picking for them</span>
+                </div>
+            )}
+
             {lastPick && (
                 <div className="px-4 py-2 bg-indigo-600/20 border-b border-indigo-500/20 text-center animate-pulse">
                     <span className="text-xs text-indigo-300">

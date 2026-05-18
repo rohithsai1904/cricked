@@ -6,12 +6,71 @@ const Room = require('../models/Room')
 const Match = require('../models/Match')
 const PreDraft = require('../models/PreDraft')
 const DraftPick = require('../models/DraftPick')
+const DraftState = require('../models/DraftState')
+const { declareResultsForMatch } = require('../services/resultService')
 
-// In-memory draft state keyed by roomId
+// In-memory draft cache keyed by roomId (source of truth is MongoDB)
 const drafts = {}
 
-const TURN_SECONDS = 60
-const OFFLINE_GRACE_SECONDS = 10
+// Persist current draft state to MongoDB
+async function saveDraftState(roomId) {
+    const draft = drafts[roomId]
+    if (!draft) return
+    try {
+        await DraftState.findOneAndUpdate(
+            { roomId },
+            {
+                player1Id: draft.player1Id,
+                player2Id: draft.player2Id,
+                firstPickUserId: draft.firstPickUserId,
+                matchStartTime: draft.matchStartTime ? new Date(draft.matchStartTime) : null,
+                turns: draft.turns,
+                currentTurn: draft.currentTurn,
+                picks: draft.picks,
+                pickedPlayerIds: Array.from(draft.pickedPlayerIds),
+                started: draft.started,
+                completed: draft.currentTurn >= TOTAL_PICKS,
+                turnStartedAt: draft.turnStartedAt ? new Date(draft.turnStartedAt) : null
+            },
+            { upsert: true }
+        )
+    } catch (err) {
+        console.error(`[draft] saveDraftState error for ${roomId}:`, err.message)
+    }
+}
+
+// Load draft state from MongoDB into memory
+async function recoverDrafts() {
+    try {
+        const states = await DraftState.find({ completed: false })
+        for (const s of states) {
+            const roomId = s.roomId.toString()
+            if (drafts[roomId]) continue
+            drafts[roomId] = {
+                roomId,
+                player1Id: s.player1Id,
+                player2Id: s.player2Id,
+                firstPickUserId: s.firstPickUserId,
+                matchStartTime: s.matchStartTime ? s.matchStartTime.getTime() : null,
+                turns: s.turns,
+                currentTurn: s.currentTurn,
+                picks: s.picks,
+                pickedPlayerIds: new Set(s.pickedPlayerIds),
+                started: s.started,
+                timer: null,
+                turnStartedAt: s.turnStartedAt ? s.turnStartedAt.getTime() : null,
+                turnTimeLimit: TURN_SECONDS,
+                picking: false
+            }
+            console.log(`[draft] Recovered draft for room ${roomId} (turn ${s.currentTurn}/${TOTAL_PICKS}, started: ${s.started})`)
+        }
+    } catch (err) {
+        console.error('[draft] recoverDrafts error:', err.message)
+    }
+}
+
+const TURN_SECONDS = 30
+const OFFLINE_GRACE_SECONDS = 20
 const MAX_PER_TEAM = {
     batsman: 2,
     bowler: 1,
@@ -151,11 +210,13 @@ function startTurn(io, roomId) {
         pickInRound: turn.pickInRound,
         totalInRound: turn.totalInRound,
         userId: turn.userId,
-        timeLimit
+        timeLimit,
+        isOnline: online
     })
 
     draft.turnStartedAt = Date.now()
     draft.turnTimeLimit = timeLimit
+    saveDraftState(roomId)
     draft.timer = setTimeout(async () => {
         if (draft.picking) return
         const player = await autoPickForUser(draft, turn)
@@ -202,10 +263,12 @@ async function makePick(io, roomId, userId, squadPlayerId, playerName, team, isA
 
     if (draft.currentTurn >= TOTAL_PICKS) {
         await Room.findByIdAndUpdate(roomId, { status: 'completed' })
+        await DraftState.findOneAndUpdate({ roomId }, { completed: true, currentTurn: draft.currentTurn, picks: draft.picks, pickedPlayerIds: Array.from(draft.pickedPlayerIds) })
         io.to(roomId).emit('draft:complete', { picks: draft.picks })
         delete drafts[roomId]
     } else {
         draft.picking = false
+        saveDraftState(roomId)
         startTurn(io, roomId)
     }
 }
@@ -219,6 +282,8 @@ async function initDraft(io, room) {
     const p2 = room.player2Id.toString()
     const firstPick = (room.firstPickUserId || room.player1Id).toString()
 
+    const matchStartTime = room.matchId?.startTime ? new Date(room.matchId.startTime).getTime() : null
+
     drafts[roomId] = {
         roomId,
         player1Id: p1,
@@ -227,54 +292,156 @@ async function initDraft(io, room) {
         turns: buildTurns(firstPick, p1, p2),
         currentTurn: 0,
         picks: [],
-        started: true,
+        started: false, // wait for both players (or deadline) before starting turns
         timer: null,
         turnStartedAt: null,
         turnTimeLimit: TURN_SECONDS,
         pickedPlayerIds: new Set(),
-        picking: false
+        picking: false,
+        matchStartTime
     }
 
     await Room.findByIdAndUpdate(roomId, { status: 'drafting' })
-
-    io.to(roomId).emit('draft:started', {
-        turns: drafts[roomId].turns,
-        firstPickUserId: firstPick
-    })
-
-    console.log(`[draft] Auto-started draft for room ${roomId}`)
-    startTurn(io, roomId)
+    await saveDraftState(roomId)
+    console.log(`[draft] Draft created for room ${roomId} — waiting for both players to connect`)
 }
 
-// Cron: check rooms that should auto-start
+// Cron: detect toss and create draft immediately
 async function checkAndStartDrafts(io) {
     try {
-        const tenMinFromNow = new Date(Date.now() + 10 * 60 * 1000)
         const rooms = await Room.find({
-            status: 'ready',
+            status: { $in: ['ready', 'drafting'] },
             player1Id: { $exists: true },
             player2Id: { $exists: true }
-        }).populate('matchId', 'startTime')
+        }).populate('matchId', 'startTime tossWinner')
 
         for (const room of rooms) {
-            if (!room.matchId || !room.matchId.startTime) continue
-            const matchStart = new Date(room.matchId.startTime)
-            if (matchStart <= tenMinFromNow) {
-                await initDraft(io, room)
-            }
+            if (!room.matchId || !room.matchId.tossWinner) continue
+            const roomId = room._id.toString()
+            if (drafts[roomId]) continue // already in memory
+            console.log(`[draft] Toss confirmed for room ${roomId}, creating draft`)
+            await initDraft(io, room)
         }
     } catch (err) {
         console.error('[draft] checkAndStartDrafts error:', err)
     }
 }
 
+// Cron: check draft deadlines (T-15: start if ≥1 online, T-5: force autopick)
+async function checkDraftDeadlines(io) {
+    try {
+        const now = Date.now()
+        for (const [roomId, draft] of Object.entries(drafts)) {
+            if (draft.started || !draft.matchStartTime) continue
+
+            const msBefore = draft.matchStartTime - now
+            const p1Online = isUserOnline(io, draft, draft.player1Id)
+            const p2Online = isUserOnline(io, draft, draft.player2Id)
+            const anyOnline = p1Online || p2Online
+
+            // 15 min before match: start if at least 1 player is connected
+            if (msBefore <= 15 * 60 * 1000 && anyOnline) {
+                draft.started = true
+                console.log(`[draft] 15min deadline — starting draft for room ${roomId} (${p1Online ? 'P1' : 'P2'} online)`)
+                io.to(roomId).emit('draft:started', {
+                    turns: draft.turns,
+                    firstPickUserId: draft.firstPickUserId
+                })
+                startTurn(io, roomId)
+                continue
+            }
+
+            // 5 min before match: force-start even if no one is connected (auto-picks)
+            if (msBefore <= 5 * 60 * 1000) {
+                draft.started = true
+                console.log(`[draft] 5min deadline — force-starting draft for room ${roomId} (auto-pick enabled)`)
+                io.to(roomId).emit('draft:started', {
+                    turns: draft.turns,
+                    firstPickUserId: draft.firstPickUserId
+                })
+                startTurn(io, roomId)
+            }
+        }
+    } catch (err) {
+        console.error('[draft] checkDraftDeadlines error:', err)
+    }
+}
+
+// Cron: complete rooms whose match has ended
+async function checkMatchCompleted(io) {
+    try {
+        const rooms = await Room.find({
+            status: { $in: ['ready', 'drafting'] }
+        }).populate('matchId', 'matchEnded')
+
+        for (const room of rooms) {
+            if (!room.matchId || !room.matchId.matchEnded) continue
+            const roomId = room._id.toString()
+
+            // Clean up in-memory draft if running
+            if (drafts[roomId]) {
+                if (drafts[roomId].timer) clearTimeout(drafts[roomId].timer)
+                io.to(roomId).emit('draft:complete', { picks: drafts[roomId].picks })
+                delete drafts[roomId]
+            }
+
+            await Room.findByIdAndUpdate(roomId, { status: 'completed' })
+            console.log(`[draft] Auto-completed room ${roomId} — match ended`)
+        }
+    } catch (err) {
+        console.error('[draft] checkMatchCompleted error:', err)
+    }
+}
+
+// Cron: auto-declare results for matches with synced scorecards
+async function checkAndDeclareResults() {
+    try {
+        const rooms = await Room.find({ resultDeclared: { $ne: true }, status: 'completed' })
+            .populate('matchId', 'scorecardSynced')
+
+        const processedMatches = new Set()
+        for (const room of rooms) {
+            if (!room.matchId || !room.matchId.scorecardSynced) continue
+            const matchId = room.matchId._id.toString()
+            if (processedMatches.has(matchId)) continue
+            processedMatches.add(matchId)
+
+            const result = await declareResultsForMatch(room.matchId._id)
+            if (result.declared > 0) {
+                console.log(`[results] Auto-declared ${result.declared} room(s) for match ${matchId}`)
+            }
+        }
+    } catch (err) {
+        console.error('[results] checkAndDeclareResults error:', err)
+    }
+}
+
 function setupDraft(io) {
     _io = io
 
-    // Check every 30 seconds for rooms that need auto-start
-    setInterval(() => checkAndStartDrafts(io), 30 * 1000)
-    // Run once on startup too
+    // Check every 2 min for toss detection / draft creation
+    setInterval(() => checkAndStartDrafts(io), 2 * 60 * 1000)
+    // Check every 30 seconds for draft deadlines (15min / 5min)
+    setInterval(() => checkDraftDeadlines(io), 30 * 1000)
+    // Check every 5 min for matches that have ended
+    setInterval(() => checkMatchCompleted(io), 5 * 60 * 1000)
+    // Check every 3 min for results to declare
+    setInterval(() => checkAndDeclareResults(), 3 * 60 * 1000)
+    // Recover persisted drafts from MongoDB, then run crons
+    recoverDrafts().then(() => {
+        console.log('[draft] Recovery complete')
+        // Resume turns for any started drafts that were interrupted
+        for (const [roomId, draft] of Object.entries(drafts)) {
+            if (draft.started && draft.currentTurn < TOTAL_PICKS && !draft.timer) {
+                console.log(`[draft] Resuming turns for room ${roomId}`)
+                startTurn(io, roomId)
+            }
+        }
+    })
     setTimeout(() => checkAndStartDrafts(io), 5000)
+    setTimeout(() => checkDraftDeadlines(io), 8000)
+    setTimeout(() => checkMatchCompleted(io), 10000)
+    setTimeout(() => checkAndDeclareResults(), 15000)
 
     io.on('connection', (socket) => {
 
@@ -316,9 +483,30 @@ function setupDraft(io) {
 
                 const draft = drafts[roomId]
 
-                // If draft hasn't been auto-started yet, nothing to do — wait for cron
+                // If draft hasn't been created yet, nothing to do — wait for cron
                 if (!draft) {
-                    socket.emit('draft:waiting', { message: 'Draft will start automatically before match time' })
+                    socket.emit('draft:waiting', { message: 'Draft will start automatically when toss is done' })
+                    return
+                }
+
+                // If draft is created but turns haven't started yet
+                if (!draft.started) {
+                    const p1Online = isUserOnline(io, draft, draft.player1Id)
+                    const p2Online = isUserOnline(io, draft, draft.player2Id)
+                    emitOnlineStatus(io, draft)
+
+                    if (p1Online && p2Online) {
+                        // Both players connected — start immediately
+                        draft.started = true
+                        console.log(`[draft] Both players connected — starting draft for room ${roomId}`)
+                        io.to(roomId).emit('draft:started', {
+                            turns: draft.turns,
+                            firstPickUserId: draft.firstPickUserId
+                        })
+                        startTurn(io, roomId)
+                    } else {
+                        socket.emit('draft:waiting', { message: 'Waiting for opponent to join...' })
+                    }
                     return
                 }
 

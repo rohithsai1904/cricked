@@ -7,6 +7,7 @@ const API_KEY = process.env.CRICAPI_KEY
 // Get upcoming matches
 const getUpcomingMatches = async () => {
     const res = await axios.get(`${BASE_URL}/series_info`, {
+        //series_infp//ipl_series_id//87c62aac-bc3c-4738-ab93-19da0690488f
         params: { apikey: API_KEY,id: '87c62aac-bc3c-4738-ab93-19da0690488f' }
     })
     return res.data

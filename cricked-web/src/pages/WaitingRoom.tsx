@@ -59,7 +59,7 @@ export default function WaitingRoom() {
                         {room.matchId.teamHome} vs {room.matchId.teamAway}
                     </div>
                     <div className="text-sm text-gray-400 mt-1">
-                        {new Date(room.matchId.startTime).toLocaleString()}
+                        {new Date(room.matchId.startTime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) + ' IST'}
                     </div>
                 </div>
 

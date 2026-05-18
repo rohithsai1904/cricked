@@ -22,7 +22,11 @@ const syncMatches = async () => {
             return
         }
         console.log(data.data)
-        const validMatches = data.data.matchList.filter(isValidMatch)
+        // Support both single match (match_info) and list (series_info)
+        const rawMatches = Array.isArray(data.data?.matchList) ? data.data.matchList
+            : Array.isArray(data.data) ? data.data
+            : data.data ? [data.data] : []
+        const validMatches = rawMatches.filter(isValidMatch)
         console.log(`[matchSync] Found ${validMatches.length} valid T20 matches`)
 
         for (const m of validMatches) {
@@ -36,9 +40,13 @@ const syncMatches = async () => {
                     teamAway: m.teams[1],
                     teamHomeImg: m.teamInfo?.[0]?.img || '',
                     teamAwayImg: m.teamInfo?.[1]?.img || '',
-                    startTime: new Date(m.dateTimeGMT),
-                    status: m.matchStarted ? 'live' :
-                        m.matchEnded ? 'completed' : 'upcoming',
+                    startTime: new Date(m.dateTimeGMT + 'Z'),
+                    status: m.matchEnded ? 'completed' :
+                        m.matchStarted ? 'live' : 'upcoming',
+                    matchStarted: !!m.matchStarted,
+                    matchEnded: !!m.matchEnded,
+                    matchWinner: m.matchWinner || '',
+                    matchStatusText: m.status || '',
                     venue: m.venue || ''
                 })
                 console.log(`[matchSync] Created: ${m.teams[0]} vs ${m.teams[1]}`)
@@ -106,7 +114,11 @@ const syncMatchStatus = async () => {
         const data = await cricapi.getUpcomingMatches()
         if (data.status !== 'success') return
 
-        for (const m of data.data) {
+        const rawMatches = Array.isArray(data.data?.matchList) ? data.data.matchList
+            : Array.isArray(data.data) ? data.data
+            : data.data ? [data.data] : []
+
+        for (const m of rawMatches) {
             const match = await Match.findOne({ cricapiId: m.id })
             if (!match) continue
 
@@ -116,10 +128,16 @@ const syncMatchStatus = async () => {
             else if (m.matchStarted) newStatus = 'live'
             else if (m.hasSquad) newStatus = 'drafting'
 
-            if (newStatus !== match.status) {
-                match.status = newStatus
+            let changed = false
+            if (newStatus !== match.status) { match.status = newStatus; changed = true }
+            if (m.matchStarted !== undefined && m.matchStarted !== match.matchStarted) { match.matchStarted = m.matchStarted; changed = true }
+            if (m.matchEnded !== undefined && m.matchEnded !== match.matchEnded) { match.matchEnded = m.matchEnded; changed = true }
+            if (m.matchWinner && m.matchWinner !== match.matchWinner) { match.matchWinner = m.matchWinner; changed = true }
+            if (m.status && m.status !== match.matchStatusText) { match.matchStatusText = m.status; changed = true }
+
+            if (changed) {
                 await match.save()
-                console.log(`[matchSync] ${match.teamHome} vs ${match.teamAway} → ${newStatus}`)
+                console.log(`[matchSync] ${match.teamHome} vs ${match.teamAway} → ${newStatus} | started=${match.matchStarted} ended=${match.matchEnded}`)
             }
         }
     } catch (err) {
@@ -159,4 +177,63 @@ const syncToss = async (matchId) => {
     }
 }
 
-module.exports = { syncMatches, syncSquad, syncMatchStatus, syncToss }
+// Fetch and store scorecard for a match
+const syncScorecard = async (matchId) => {
+    console.log(`[matchSync] Fetching scorecard for match ${matchId}`)
+
+    try {
+        const match = await Match.findById(matchId)
+        if (!match || !match.cricapiId) return { error: 'Match not found or no cricapiId' }
+
+        const data = await cricapi.getScorecard(match.cricapiId)
+        if (data.status !== 'success' || !data.data) {
+            return { error: 'Scorecard not available yet' }
+        }
+
+        const scorecard = data.data.scorecard || []
+
+        // Flatten all batting and bowling entries across innings
+        const battingStats = []
+        const bowlingStats = []
+
+        for (const inning of scorecard) {
+            for (const b of (inning.batting || [])) {
+                battingStats.push({
+                    playerId: b.batsman?.id || '',
+                    playerName: b.batsman?.name || '',
+                    runs: b.r || 0,
+                    balls: b.b || 0,
+                    fours: b['4s'] || 0,
+                    sixes: b['6s'] || 0,
+                    sr: b.sr || 0,
+                    inning: inning.inning || ''
+                })
+            }
+            for (const bw of (inning.bowling || [])) {
+                bowlingStats.push({
+                    playerId: bw.bowler?.id || '',
+                    playerName: bw.bowler?.name || '',
+                    overs: bw.o || 0,
+                    maidens: bw.m || 0,
+                    runs: bw.r || 0,
+                    wickets: bw.w || 0,
+                    eco: bw.eco || 0,
+                    inning: inning.inning || ''
+                })
+            }
+        }
+
+        match.battingStats = battingStats
+        match.bowlingStats = bowlingStats
+        match.scorecardSynced = true
+        await match.save()
+
+        console.log(`[matchSync] Scorecard stored: ${battingStats.length} batting, ${bowlingStats.length} bowling entries`)
+        return { battingStats, bowlingStats }
+    } catch (err) {
+        console.error('[matchSync] Scorecard sync error:', err.message)
+        return { error: err.message }
+    }
+}
+
+module.exports = { syncMatches, syncSquad, syncMatchStatus, syncToss, syncScorecard }

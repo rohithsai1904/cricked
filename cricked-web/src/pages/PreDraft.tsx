@@ -309,7 +309,7 @@ export default function PreDraft() {
                     {matchInfo?.teamHome} vs {matchInfo?.teamAway}
                 </div>
                 <div className="text-xs text-gray-400 mt-1">
-                    {matchInfo && new Date(matchInfo.startTime).toLocaleString()}
+                    {matchInfo && new Date(matchInfo.startTime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) + ' IST'}
                 </div>
             </div>
 

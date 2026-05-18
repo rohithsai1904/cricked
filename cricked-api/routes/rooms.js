@@ -5,6 +5,7 @@ const Match = require('../models/Match')
 const RandomQueue = require('../models/RandomQueue')
 const authMiddleware = require('../middleware/auth')
 const PreDraft = require('../models/PreDraft')
+const DraftPick = require('../models/DraftPick')
 
 // Helper — generate random 6-char invite code
 function generateInviteCode() {
@@ -38,6 +39,12 @@ router.post('/create', authMiddleware, async (req, res) => {
         if (!match) return res.status(404).json({ error: 'Match not found' })
         if (match.status === 'completed') {
             return res.status(400).json({ error: 'Match already completed' })
+        }
+
+        // Block room creation within 5 minutes of match start
+        const msUntilStart = new Date(match.startTime).getTime() - Date.now()
+        if (msUntilStart <= 5 * 60 * 1000) {
+            return res.status(400).json({ error: 'Room creation locked — match starts in less than 5 minutes' })
         }
 
         // 5 room limit
@@ -116,6 +123,12 @@ router.post('/random', authMiddleware, async (req, res) => {
     try {
         const match = await Match.findById(matchId)
         if (!match) return res.status(404).json({ error: 'Match not found' })
+
+        // Block random queue within 5 minutes of match start
+        const msUntilStart = new Date(match.startTime).getTime() - Date.now()
+        if (msUntilStart <= 5 * 60 * 1000) {
+            return res.status(400).json({ error: 'Matchmaking locked — match starts in less than 5 minutes' })
+        }
 
         // 5 room limit
         const atLimit = await checkRoomLimit(userId, matchId)
@@ -266,16 +279,64 @@ router.get('/my-pending', authMiddleware, async (req, res) => {
             .populate('matchId', 'teamHome teamAway startTime')
             .sort({ createdAt: -1 })
 
-        const drafting = await Room.find({
+        const draftingAll = await Room.find({
             $or: [{ player1Id: userId }, { player2Id: userId }],
             status: 'drafting'
         })
-            .populate('matchId', 'teamHome teamAway startTime')
+            .populate('matchId', 'teamHome teamAway startTime tossWinner')
             .populate('player1Id', 'username')
             .populate('player2Id', 'username')
             .sort({ createdAt: -1 })
 
+        // Only show drafting rooms where toss is NOT yet made (toss-made rooms go to Live tab)
+        const drafting = draftingAll.filter(r => !r.matchId?.tossWinner)
+
         res.json({ matched, waiting, drafting, currentUserId: userId })
+    } catch (err) {
+        console.error(err)
+        res.status(500).json({ error: 'Server error' })
+    }
+})
+
+// GET /rooms/my-live — rooms where match is ongoing (started but not ended)
+router.get('/my-live', authMiddleware, async (req, res) => {
+    const userId = req.user.userId
+    try {
+        const rooms = await Room.find({
+            $or: [{ player1Id: userId }, { player2Id: userId }],
+            status: { $in: ['drafting', 'completed'] }
+        })
+            .populate('matchId', 'teamHome teamAway startTime teamHomeImg teamAwayImg matchStarted matchEnded matchStatusText tossWinner tossChoice')
+            .populate('player1Id', 'username displayName')
+            .populate('player2Id', 'username displayName')
+            .sort({ createdAt: -1 })
+
+        // Only return rooms where toss is done and match NOT ended
+        const live = rooms.filter(r => r.matchId && r.matchId.tossWinner && !r.matchId.matchEnded)
+        res.json(live)
+    } catch (err) {
+        console.error(err)
+        res.status(500).json({ error: 'Server error' })
+    }
+})
+
+// GET /rooms/my-completed — rooms where match has ended
+router.get('/my-completed', authMiddleware, async (req, res) => {
+    const userId = req.user.userId
+    try {
+        const rooms = await Room.find({
+            $or: [{ player1Id: userId }, { player2Id: userId }]
+        })
+            .populate('matchId', 'teamHome teamAway startTime teamHomeImg teamAwayImg matchEnded matchWinner matchStatusText')
+            .populate('player1Id', 'username displayName')
+            .populate('player2Id', 'username displayName')
+            .populate('winnerId', 'username')
+            .sort({ updatedAt: -1 })
+            .limit(50)
+
+        // Return rooms where result is declared OR match has ended
+        const completed = rooms.filter(r => r.matchId && (r.resultDeclared || r.matchId.matchEnded === true))
+        res.json(completed)
     } catch (err) {
         console.error(err)
         res.status(500).json({ error: 'Server error' })
@@ -368,6 +429,18 @@ router.get('/:id/predraft', authMiddleware, async (req, res) => {
     }
 })
 
+// GET /rooms/:id/picks — get draft picks for a room
+router.get('/:id/picks', authMiddleware, async (req, res) => {
+    try {
+        const DraftPick = require('../models/DraftPick')
+        const picks = await DraftPick.find({ roomId: req.params.id }).sort({ pickNumber: 1 })
+        res.json(picks)
+    } catch (err) {
+        console.error(err)
+        res.status(500).json({ error: 'Server error' })
+    }
+})
+
 // GET /rooms/:id/squad — get squad for the match in this room
 router.get('/:id/squad', authMiddleware, async (req, res) => {
     try {
@@ -413,6 +486,104 @@ router.get('/:id/squad', authMiddleware, async (req, res) => {
             batsmen: batsmen.map(addStatus),
             bowlers: bowlers.map(addStatus),
             allrounders: allrounders.map(addStatus)
+        })
+    } catch (err) {
+        console.error(err)
+        res.status(500).json({ error: 'Server error' })
+    }
+})
+
+// --- Scoring helpers ---
+function calcPoints(pick, battingStats, bowlingStats) {
+    const name = pick.playerName
+    const pickType = pick.pickType
+
+    // Find stats by player name (case-insensitive)
+    const batting = battingStats.find(b => b.playerName.toLowerCase() === name.toLowerCase())
+    const bowling = bowlingStats.find(b => b.playerName.toLowerCase() === name.toLowerCase())
+
+    const runs = batting?.runs || 0
+    const wickets = bowling?.wickets || 0
+
+    let points = 0
+    let breakdown = []
+
+    if (pickType === 'batsman') {
+        points += runs * 8
+        breakdown.push(`${runs} runs × 8 = ${runs * 8}`)
+        if (runs >= 100) { points += 100; breakdown.push('+100 (century)') }
+        else if (runs >= 50) { points += 50; breakdown.push('+50 (half-century)') }
+    } else if (pickType === 'bowler') {
+        points += wickets * 120
+        breakdown.push(`${wickets} wkts × 120 = ${wickets * 120}`)
+        if (wickets >= 3) { points += 50; breakdown.push('+50 (3+ wickets)') }
+    } else if (pickType === 'allrounder') {
+        points += runs * 8
+        points += wickets * 120
+        breakdown.push(`${runs} runs × 8 = ${runs * 8}`)
+        breakdown.push(`${wickets} wkts × 120 = ${wickets * 120}`)
+        if (runs >= 30 && wickets >= 2) { points += 50; breakdown.push('+50 (AR bonus)') }
+    }
+
+    return {
+        points,
+        breakdown,
+        stats: { runs, wickets, balls: batting?.balls || 0, sr: batting?.sr || 0, overs: bowling?.overs || 0, eco: bowling?.eco || 0 }
+    }
+}
+
+// GET /rooms/:id/results — picks with points
+router.get('/:id/results', authMiddleware, async (req, res) => {
+    try {
+        const room = await Room.findById(req.params.id)
+            .populate('matchId')
+            .populate('player1Id', 'username displayName')
+            .populate('player2Id', 'username displayName')
+        if (!room) return res.status(404).json({ error: 'Room not found' })
+
+        const match = room.matchId
+        const picks = await DraftPick.find({ roomId: room._id }).sort({ pickNumber: 1 })
+
+        const battingStats = match.battingStats || []
+        const bowlingStats = match.bowlingStats || []
+
+        const p1Id = room.player1Id._id.toString()
+        const p2Id = room.player2Id._id.toString()
+
+        let p1Total = 0, p2Total = 0
+        const enrichedPicks = picks.map(pick => {
+            const { points, breakdown, stats } = calcPoints(pick, battingStats, bowlingStats)
+            if (pick.userId.toString() === p1Id) p1Total += points
+            else p2Total += points
+            return {
+                ...pick.toObject(),
+                points,
+                breakdown,
+                stats
+            }
+        })
+
+        res.json({
+            room: {
+                _id: room._id,
+                status: room.status,
+                player1: room.player1Id,
+                player2: room.player2Id
+            },
+            match: {
+                teamHome: match.teamHome,
+                teamAway: match.teamAway,
+                startTime: match.startTime,
+                matchStatusText: match.matchStatusText,
+                matchWinner: match.matchWinner,
+                matchEnded: match.matchEnded,
+                scorecardSynced: match.scorecardSynced
+            },
+            picks: enrichedPicks,
+            scores: {
+                [p1Id]: p1Total,
+                [p2Id]: p2Total
+            }
         })
     } catch (err) {
         console.error(err)
