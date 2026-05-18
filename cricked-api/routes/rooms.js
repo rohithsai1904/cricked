@@ -25,7 +25,7 @@ const checkRoomLimit = async (userId, matchId) => {
             { player2Id: userId }
         ]
     })
-    return count >= 5
+    return count >= 10
 }
 
 // POST /rooms/create — create a room for a match
@@ -254,7 +254,7 @@ router.get('/my-pending', authMiddleware, async (req, res) => {
             player1Id: { $exists: true },
             player2Id: { $exists: true }
         })
-            .populate('matchId', 'teamHome teamAway startTime')
+            .populate('matchId', 'teamHome teamAway startTime tossWinner tossChoice')
             .populate('player1Id', 'username')
             .populate('player2Id', 'username')
             .sort({ createdAt: -1 })
@@ -266,7 +266,16 @@ router.get('/my-pending', authMiddleware, async (req, res) => {
             .populate('matchId', 'teamHome teamAway startTime')
             .sort({ createdAt: -1 })
 
-        res.json({ matched, waiting, currentUserId: userId })
+        const drafting = await Room.find({
+            $or: [{ player1Id: userId }, { player2Id: userId }],
+            status: 'drafting'
+        })
+            .populate('matchId', 'teamHome teamAway startTime')
+            .populate('player1Id', 'username')
+            .populate('player2Id', 'username')
+            .sort({ createdAt: -1 })
+
+        res.json({ matched, waiting, drafting, currentUserId: userId })
     } catch (err) {
         console.error(err)
         res.status(500).json({ error: 'Server error' })
@@ -306,6 +315,7 @@ router.post('/:id/predraft', authMiddleware, async (req, res) => {
             userId,
             playerName: p.playerName,
             squadPlayerId: p.playerId,
+            team: p.team || '',
             rankOrder: i + 1,
             pickType: 'batsman'
         }))
@@ -315,6 +325,7 @@ router.post('/:id/predraft', authMiddleware, async (req, res) => {
             userId,
             playerName: p.playerName,
             squadPlayerId: p.playerId,
+            team: p.team || '',
             rankOrder: i + 1,
             pickType: 'bowler'
         }))
@@ -324,6 +335,7 @@ router.post('/:id/predraft', authMiddleware, async (req, res) => {
             userId,
             playerName: p.playerName,
             squadPlayerId: p.playerId,
+            team: p.team || '',
             rankOrder: i + 1,
             pickType: 'allrounder'
         }))
@@ -386,6 +398,11 @@ router.get('/:id/squad', authMiddleware, async (req, res) => {
             ['Batting Allrounder', 'Bowling Allrounder'].includes(p.role)
         )
 
+        const addStatus = (p) => ({
+            ...p,
+            squadStatus: p.squadType || 'squad'
+        })
+
         res.json({
             match: {
                 id: match._id,
@@ -393,9 +410,9 @@ router.get('/:id/squad', authMiddleware, async (req, res) => {
                 teamAway: match.teamAway,
                 startTime: match.startTime
             },
-            batsmen,
-            bowlers,
-            allrounders
+            batsmen: batsmen.map(addStatus),
+            bowlers: bowlers.map(addStatus),
+            allrounders: allrounders.map(addStatus)
         })
     } catch (err) {
         console.error(err)

@@ -97,6 +97,18 @@ export default function PreDraft() {
         allrounders: MAX_ALLROUNDERS
     }
 
+    const MAX_PER_TEAM: Record<Tab, number> = {
+        batsmen: 4,
+        bowlers: 2,
+        allrounders: 2
+    }
+
+    const teamCountInTab = (tab: Tab, team: string) =>
+        ranked[tab].filter(p => p.team === team).length
+
+    const isTeamFullInTab = (tab: Tab, team: string) =>
+        teamCountInTab(tab, team) >= MAX_PER_TEAM[tab]
+
     const togglePlayer = (player: Player, tab: Tab) => {
         const current = ranked[tab]
         const exists = current.find(p => p.playerId === player.playerId)
@@ -107,6 +119,7 @@ export default function PreDraft() {
             }))
         } else {
             if (current.length >= maxMap[tab]) return
+            if (isTeamFullInTab(tab, player.team)) return
             setRanked(prev => ({
                 ...prev,
                 [tab]: [...prev[tab], player]
@@ -157,6 +170,8 @@ export default function PreDraft() {
                 if (queueRes.data.matched) {
                     setIsRandomRoom(false)
                 }
+                setShowDone(true)
+            } else if (roomRes.data.status === 'ready' || roomRes.data.status === 'drafting') {
                 setShowDone(true)
             } else if (roomRes.data.status === 'waiting') {
                 setInviteCode(roomRes.data.inviteCode)
@@ -318,14 +333,14 @@ export default function PreDraft() {
 
             {/* Per-team split */}
             <div className="flex gap-4 px-4 py-2 bg-gray-900/50 text-xs">
-                <div className={teamCount(activeTab, teamHome) >= (activeTab === 'batsmen' ? MIN_BAT_PER_TEAM : activeTab === 'bowlers' ? MIN_BOWL_PER_TEAM : MIN_AR_PER_TEAM) ? 'text-green-400' : 'text-yellow-400'}>
-                    {teamHome}: {teamCount(activeTab, teamHome)}
+                <div className={teamCountInTab(activeTab, teamHome) >= MAX_PER_TEAM[activeTab] ? 'text-red-400' : teamCountInTab(activeTab, teamHome) >= (activeTab === 'batsmen' ? MIN_BAT_PER_TEAM : activeTab === 'bowlers' ? MIN_BOWL_PER_TEAM : MIN_AR_PER_TEAM) ? 'text-green-400' : 'text-yellow-400'}>
+                    {teamHome}: {teamCountInTab(activeTab, teamHome)}/{MAX_PER_TEAM[activeTab]}
                 </div>
-                <div className={teamCount(activeTab, teamAway) >= (activeTab === 'batsmen' ? MIN_BAT_PER_TEAM : activeTab === 'bowlers' ? MIN_BOWL_PER_TEAM : MIN_AR_PER_TEAM) ? 'text-green-400' : 'text-yellow-400'}>
-                    {teamAway}: {teamCount(activeTab, teamAway)}
+                <div className={teamCountInTab(activeTab, teamAway) >= MAX_PER_TEAM[activeTab] ? 'text-red-400' : teamCountInTab(activeTab, teamAway) >= (activeTab === 'batsmen' ? MIN_BAT_PER_TEAM : activeTab === 'bowlers' ? MIN_BOWL_PER_TEAM : MIN_AR_PER_TEAM) ? 'text-green-400' : 'text-yellow-400'}>
+                    {teamAway}: {teamCountInTab(activeTab, teamAway)}/{MAX_PER_TEAM[activeTab]}
                 </div>
                 <div className="text-gray-500 ml-auto">
-                    min {activeTab === 'batsmen' ? MIN_BAT_PER_TEAM : activeTab === 'bowlers' ? MIN_BOWL_PER_TEAM : MIN_AR_PER_TEAM}/team
+                    max {MAX_PER_TEAM[activeTab]}/team
                 </div>
             </div>
 
@@ -339,16 +354,18 @@ export default function PreDraft() {
                     <div className="flex flex-col gap-2">
                         {currentPool.map(player => {
                             const isRanked = currentRanked.find(p => p.playerId === player.playerId)
-                            const isFull = !isRanked && currentRanked.length >= maxMap[activeTab]
+                            const isCategoryFull = !isRanked && currentRanked.length >= maxMap[activeTab]
+                            const isTeamCapped = !isRanked && isTeamFullInTab(activeTab, player.team)
+                            const isDisabled = isCategoryFull || isTeamCapped
                             return (
                                 <button
                                     key={player.playerId}
                                     onClick={() => togglePlayer(player, activeTab)}
-                                    disabled={isFull}
+                                    disabled={isDisabled}
                                     className={`flex items-center justify-between px-4 py-3 rounded-xl text-left transition ${
                                         isRanked
                                             ? 'bg-green-500/20 border border-green-500/50'
-                                            : isFull
+                                            : isDisabled
                                                 ? 'bg-gray-900/50 opacity-40 cursor-not-allowed'
                                                 : 'bg-gray-900 hover:bg-gray-800'
                                     }`}
@@ -357,6 +374,9 @@ export default function PreDraft() {
                                         <div className="text-sm font-medium">{player.playerName}</div>
                                         <div className="text-xs text-gray-400 mt-0.5">
                                             {player.team} · {player.role}
+                                            {isTeamCapped && !isCategoryFull && (
+                                                <span className="text-red-400 ml-1">(team full)</span>
+                                            )}
                                         </div>
                                     </div>
                                     {isRanked && (

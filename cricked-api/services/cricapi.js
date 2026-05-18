@@ -28,4 +28,11 @@ const getScorecard = async (matchId) => {
     return res.data
 }
 
-module.exports = { getUpcomingMatches, getMatchDetail, getScorecard }
+const getMatchInfo = async (matchId) => {
+    const res = await axios.get(`${BASE_URL}/match_info`, {
+        params: { apikey: API_KEY, id: matchId }
+    })
+    return res.data
+}
+
+module.exports = { getUpcomingMatches, getMatchDetail, getScorecard,getMatchInfo }

@@ -19,6 +19,7 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true)
     const [matchedRooms, setMatchedRooms] = useState<any[]>([])
     const [waitingRooms, setWaitingRooms] = useState<any[]>([])
+    const [draftingRooms, setDraftingRooms] = useState<any[]>([])
     const [currentUserId, setCurrentUserId] = useState('')
     const [user, setUser] = useState<any>(null)
     const [showProfile, setShowProfile] = useState(false)
@@ -51,6 +52,7 @@ export default function Dashboard() {
             const res = await api.get('/rooms/my-pending')
             setMatchedRooms(res.data.matched)
             setWaitingRooms(res.data.waiting)
+            setDraftingRooms(res.data.drafting || [])
             setCurrentUserId(res.data.currentUserId)
         } catch (err) {
             console.error(err)
@@ -67,6 +69,10 @@ export default function Dashboard() {
         fetchUser()
         fetchMatches()
         fetchPendingRooms()
+
+        // Poll every 30s for active drafts
+        const interval = setInterval(fetchPendingRooms, 30000)
+        return () => clearInterval(interval)
     }, [])
 
     const handleLogout = () => {
@@ -153,6 +159,42 @@ export default function Dashboard() {
             {/* Content */}
             <div className="w-full max-w-lg mx-auto px-6 py-8">
 
+                {draftingRooms.length > 0 && (
+                    <div className="mb-6">
+                        <h2 className="text-lg font-semibold mb-3">
+                            🔴 Live Drafts
+                        </h2>
+                        <div className="flex flex-col gap-3">
+                            {draftingRooms.map(room => (
+                                <div
+                                    key={room._id}
+                                    className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 animate-pulse"
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex-1">
+                                            <div className="font-medium text-sm">
+                                                {room.matchId.teamHome} vs {room.matchId.teamAway}
+                                            </div>
+                                            <div className="text-xs text-gray-400 mt-1">
+                                                vs <span className="text-white font-medium">{getOpponent(room)}</span>
+                                            </div>
+                                            <div className="text-xs text-red-400 mt-1 font-semibold">
+                                                🔴 Draft in progress!
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => navigate(`/room/${room._id}/draft`)}
+                                            className="bg-red-500 text-white text-sm font-semibold px-4 py-2 rounded-lg animate-bounce"
+                                        >
+                                            Join Draft →
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {matchedRooms.length > 0 && (
                     <div className="mb-6">
                         <h2 className="text-lg font-semibold mb-3">
@@ -165,27 +207,38 @@ export default function Dashboard() {
                                     className="bg-green-500/10 border border-green-500/30 rounded-xl p-4"
                                 >
                                     <div className="flex items-center justify-between">
-                                        <div>
+                                        <div className="flex-1">
                                             <div className="font-medium text-sm">
                                                 {room.matchId.teamHome} vs {room.matchId.teamAway}
                                             </div>
                                             <div className="text-xs text-gray-400 mt-1">
                                                 vs <span className="text-white font-medium">{getOpponent(room)}</span>
                                             </div>
+                                            {room.matchId.tossWinner && (
+                                                <div className="text-xs text-yellow-400 mt-1">
+                                                    🪙 {room.matchId.tossWinner} won toss, chose to {room.matchId.tossChoice}
+                                                </div>
+                                            )}
                                         </div>
-                                        <div className="flex gap-2">
+                                        <div className="flex gap-2 shrink-0">
                                             <button
                                                 onClick={() => navigate(`/room/${room._id}/details`)}
                                                 className="bg-gray-800 text-white text-sm font-semibold px-3 py-2 rounded-lg"
                                             >
                                                 Details
                                             </button>
-                                            <button
-                                                onClick={() => navigate(`/room/${room._id}/predraft`)}
-                                                className="bg-green-500 text-black text-sm font-semibold px-3 py-2 rounded-lg"
-                                            >
-                                                Draft →
-                                            </button>
+                                            {room.matchId.tossWinner ? (
+                                                <button
+                                                    onClick={() => navigate(`/room/${room._id}/draft`)}
+                                                    className="bg-green-500 text-black text-sm font-semibold px-3 py-2 rounded-lg"
+                                                >
+                                                    Pick Squad →
+                                                </button>
+                                            ) : (
+                                                <div className="text-xs text-gray-500 flex items-center px-2">
+                                                    ⏳ Awaiting toss
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

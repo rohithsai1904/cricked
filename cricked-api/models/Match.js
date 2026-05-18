@@ -3,7 +3,12 @@ const mongoose = require('mongoose')
 const playerSchema = new mongoose.Schema({
     playerId: String,
     playerName: String,
-    role: String
+    role: String,
+    squadType: {
+        type: String,
+        enum: ['playingXI', 'impact', 'squad'],
+        default: 'squad'
+    }
 })
 
 const matchSchema = new mongoose.Schema({
@@ -19,6 +24,8 @@ const matchSchema = new mongoose.Schema({
     playingXiAway: [playerSchema],
     startTime: { type: Date, required: true },
     tossTime: Date,
+    tossWinner: { type: String, default: '' },
+    tossChoice: { type: String, default: '' },
     status: {
         type: String,
         enum: ['upcoming', 'drafting', 'live', 'completed'],

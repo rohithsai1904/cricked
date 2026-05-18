@@ -6,6 +6,8 @@ import Play from './pages/Play'
 import WaitingRoom from './pages/WaitingRoom'
 import PreDraft from './pages/PreDraft'
 import RoomDetails from './pages/RoomDetails'
+import LiveDraft from './pages/LiveDraft'
+import DraftResult from './pages/DraftResult'
 
 function App() {
     return (
@@ -19,6 +21,8 @@ function App() {
                 <Route path="/room/:roomId/predraft" element={<PreDraft />} />
                 <Route path="/match/:matchId/predraft" element={<PreDraft />} />
                 <Route path="/room/:roomId/details" element={<RoomDetails />} />
+                <Route path="/room/:roomId/draft" element={<LiveDraft />} />
+                <Route path="/room/:roomId/result" element={<DraftResult />} />
             </Routes>
         </BrowserRouter>
     )

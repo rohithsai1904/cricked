@@ -2,7 +2,7 @@ const express = require('express')
 const router = express.Router()
 const Match = require('../models/Match')
 const authMiddleware = require('../middleware/auth')
-const { syncMatches, syncSquad, syncMatchStatus } = require('../services/matchSync')
+const { syncMatches, syncSquad, syncMatchStatus, syncToss } = require('../services/matchSync')
 
 // GET /matches — all upcoming matches
 router.get('/', async (req, res) => {
@@ -50,6 +50,16 @@ router.post('/:id/sync-squad', async (req, res) => {
     try {
         await syncSquad(req.params.id)
         res.json({ message: 'Squad sync complete' })
+    } catch (err) {
+        res.status(500).json({ error: err.message })
+    }
+})
+
+// POST /matches/:id/sync-toss — manually sync toss for one match
+router.post('/:id/sync-toss', async (req, res) => {
+    try {
+        await syncToss(req.params.id)
+        res.json({ message: 'Toss sync complete' })
     } catch (err) {
         res.status(500).json({ error: err.message })
     }

@@ -13,6 +13,7 @@ const preDraftSchema = new mongoose.Schema({
     },
     playerName: { type: String, required: true },
     squadPlayerId: String,
+    team: { type: String, default: '' },
     rankOrder: { type: Number, required: true },
     pickType: {
         type: String,

@@ -127,4 +127,36 @@ const syncMatchStatus = async () => {
     }
 }
 
-module.exports = { syncMatches, syncSquad, syncMatchStatus }
+// Fetch toss data for a specific match
+const syncToss = async (matchId) => {
+    console.log(`[matchSync] Fetching toss for match ${matchId}`)
+
+    try {
+        const match = await Match.findById(matchId)
+        if (!match || !match.cricapiId) return
+
+        const data = await cricapi.getMatchInfo(match.cricapiId)
+        if (data.status !== 'success' || !data.data) {
+            console.log(`[matchSync] Toss not available yet for ${match.teamHome} vs ${match.teamAway}`)
+            return
+        }
+
+        const tossWinner = data.data.tossWinner || ''
+        const tossChoice = data.data.tossChoice || ''
+
+        if (tossWinner) {
+            match.tossWinner = tossWinner
+            match.tossChoice = tossChoice
+            match.tossTime = new Date()
+            if (match.status === 'upcoming') match.status = 'live'
+            await match.save()
+            console.log(`[matchSync] Toss done — ${match.teamHome} vs ${match.teamAway}`)
+        } else {
+            console.log(`[matchSync] No toss yet for ${match.teamHome} vs ${match.teamAway}`)
+        }
+    } catch (err) {
+        console.error('[matchSync] Toss sync error:', err.message)
+    }
+}
+
+module.exports = { syncMatches, syncSquad, syncMatchStatus, syncToss }
