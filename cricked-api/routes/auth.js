@@ -30,8 +30,9 @@ router.get('/google/callback',
 
             // Redirect to frontend with token in URL
             // Frontend grabs it and stores in localStorage
+            const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173'
             res.redirect(
-                `http://localhost:5173/auth/callback?token=${token}`
+                `${clientUrl}/auth/callback?token=${token}`
             )
         } catch (err) {
             console.error(err)
