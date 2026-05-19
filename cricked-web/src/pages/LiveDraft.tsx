@@ -265,7 +265,7 @@ export default function LiveDraft() {
     if (!started) {
         return (
             <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center px-6">
-                <div className="text-center flex flex-col items-center gap-8">
+                <div className="text-center flex flex-col items-center gap-8 max-w-sm w-full">
                     {matchInfo && (
                         <div className="text-sm font-medium text-gray-400">
                             {matchInfo.teamHome} vs {matchInfo.teamAway}
@@ -279,6 +279,49 @@ export default function LiveDraft() {
                         <p className="text-gray-500 text-sm">
                             {waitingMessage || 'Draft will start automatically before match time'}
                         </p>
+                    </div>
+
+                    {/* Draft Flow Timeline */}
+                    <div className="w-full bg-gray-900/60 border border-gray-800 rounded-xl p-4 text-left">
+                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                            Draft Timeline
+                        </h3>
+                        <div className="flex flex-col gap-3">
+                            <div className="flex gap-3 items-start">
+                                <div className="flex flex-col items-center">
+                                    <div className="w-6 h-6 rounded-full bg-green-500/20 border border-green-500/40 flex items-center justify-center text-[10px] text-green-400 font-bold shrink-0">1</div>
+                                    <div className="w-px h-full bg-gray-700 mt-1" />
+                                </div>
+                                <div>
+                                    <div className="text-xs font-semibold text-green-400">Toss → T-15 min</div>
+                                    <div className="text-[11px] text-gray-500 mt-0.5">Join after toss. Draft starts when both players are ready.</div>
+                                </div>
+                            </div>
+                            <div className="flex gap-3 items-start">
+                                <div className="flex flex-col items-center">
+                                    <div className="w-6 h-6 rounded-full bg-yellow-500/20 border border-yellow-500/40 flex items-center justify-center text-[10px] text-yellow-400 font-bold shrink-0">2</div>
+                                    <div className="w-px h-full bg-gray-700 mt-1" />
+                                </div>
+                                <div>
+                                    <div className="text-xs font-semibold text-yellow-400">T-15 min → T-5 min</div>
+                                    <div className="text-[11px] text-gray-500 mt-0.5">Draft keeps going. Auto-pick covers you if your opponent goes offline.</div>
+                                </div>
+                            </div>
+                            <div className="flex gap-3 items-start">
+                                <div className="flex flex-col items-center">
+                                    <div className="w-6 h-6 rounded-full bg-red-500/20 border border-red-500/40 flex items-center justify-center text-[10px] text-red-400 font-bold shrink-0">3</div>
+                                </div>
+                                <div>
+                                    <div className="text-xs font-semibold text-red-400">T-5 min → Match Start</div>
+                                    <div className="text-[11px] text-gray-500 mt-0.5">Draft locks. Any unpicked slots are auto-filled from your pre-draft list.</div>
+                                </div>
+                            </div>
+                        </div>
+                        {matchInfo?.startTime && (
+                            <div className="mt-3 text-[10px] text-gray-600 text-center">
+                                T = Match start ({new Date(matchInfo.startTime).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })} IST)
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -337,7 +380,7 @@ export default function LiveDraft() {
                             </span>
                         </div>
                         <div className="font-bold text-sm">
-                            Pick {currentTurn?.pickInRound} of {currentTurn?.totalInRound || 8}
+                            Pick {currentTurn?.pickInRound} of {currentTurn?.totalInRound || 7}
                         </div>
                     </div>
 
@@ -499,7 +542,7 @@ export default function LiveDraft() {
                                     </h4>
                                 </div>
                                 <span className="text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded-full font-bold">
-                                    {myPicks.length}/8
+                                    {myPicks.length}/7
                                 </span>
                             </div>
                             <div className="flex flex-col gap-2">
@@ -547,7 +590,7 @@ export default function LiveDraft() {
                                     </h4>
                                 </div>
                                 <span className="text-xs bg-red-500/10 text-red-400 px-2 py-0.5 rounded-full font-bold">
-                                    {oppPicks.length}/8
+                                    {oppPicks.length}/7
                                 </span>
                             </div>
                             <div className="flex flex-col gap-2">

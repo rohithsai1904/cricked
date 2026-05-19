@@ -77,14 +77,14 @@ const MAX_PER_TEAM = {
     allrounder: 1
 }
 
-// 3 rounds: batsmen(4 each), bowlers(2 each), allrounders(2 each) = 8 per player, 16 total
+// 3 rounds: batsmen(3 each), bowlers(2 each), allrounders(2 each) = 7 per player, 14 total
 const ROUNDS = [
-    { type: 'batsman', label: 'Batsmen', picksEach: 4, coinWinnerStarts: true },
+    { type: 'batsman', label: 'Batsmen', picksEach: 3, coinWinnerStarts: true },
     { type: 'bowler', label: 'Bowlers', picksEach: 2, coinWinnerStarts: false },
     { type: 'allrounder', label: 'All-rounders', picksEach: 2, coinWinnerStarts: true }
 ]
 
-const TOTAL_PICKS = ROUNDS.reduce((sum, r) => sum + r.picksEach * 2, 0) // 16
+const TOTAL_PICKS = ROUNDS.reduce((sum, r) => sum + r.picksEach * 2, 0) // 14
 
 let _io = null
 

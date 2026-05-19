@@ -88,7 +88,7 @@ export default function PreDraft() {
         }
     }
 
-    const MAX_BATSMEN = 8
+    const MAX_BATSMEN = 6
     const MAX_BOWLERS = 4
     const MAX_ALLROUNDERS = 4
     const maxMap: Record<Tab, number> = {
@@ -98,7 +98,7 @@ export default function PreDraft() {
     }
 
     const MAX_PER_TEAM: Record<Tab, number> = {
-        batsmen: 4,
+        batsmen: 3,
         bowlers: 2,
         allrounders: 2
     }

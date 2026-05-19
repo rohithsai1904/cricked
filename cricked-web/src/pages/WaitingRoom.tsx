@@ -11,17 +11,31 @@ interface Room {
     matchId: { teamHome: string; teamAway: string; startTime: string }
 }
 
+function formatCountdown(ms: number): string {
+    if (ms <= 0) return '0m'
+    const h = Math.floor(ms / 3600000)
+    const m = Math.floor((ms % 3600000) / 60000)
+    if (h > 0) return `${h}h ${m}m`
+    return `${m}m`
+}
+
 export default function WaitingRoom() {
     const { roomId } = useParams()
     const navigate = useNavigate()
     const [room, setRoom] = useState<Room | null>(null)
     const [copied, setCopied] = useState(false)
+    const [now, setNow] = useState(Date.now())
 
     useEffect(() => {
         fetchRoom()
         // Poll every 3 seconds until opponent joins
         const interval = setInterval(fetchRoom, 3000)
         return () => clearInterval(interval)
+    }, [])
+
+    useEffect(() => {
+        const tick = setInterval(() => setNow(Date.now()), 10000)
+        return () => clearInterval(tick)
     }, [])
 
     const fetchRoom = async () => {
@@ -116,6 +130,63 @@ export default function WaitingRoom() {
                         Taking you to the draft...
                     </p>
                 )}
+
+                {/* Contextual Draft Timeline */}
+                {(() => {
+                    const startMs = new Date(room.matchId.startTime).getTime()
+                    const msLeft = startMs - now
+                    const t15 = startMs - 15 * 60000
+                    const t5 = startMs - 5 * 60000
+                    const phase = now >= t5 ? 3 : now >= t15 ? 2 : 1
+                    const matchTimeStr = new Date(room.matchId.startTime).toLocaleString('en-IN', {
+                        timeZone: 'Asia/Kolkata',
+                        month: 'short', day: 'numeric',
+                        hour: '2-digit', minute: '2-digit', hour12: true
+                    }) + ' IST'
+
+                    return (
+                        <div className="w-full bg-gray-900/60 border border-gray-800 rounded-xl overflow-hidden mt-2">
+                            <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+                                <div className="text-xs font-semibold text-white">
+                                    {room.matchId.teamHome} vs {room.matchId.teamAway}
+                                </div>
+                                <div className="text-[10px] text-gray-500">{matchTimeStr}</div>
+                            </div>
+                            <div className="px-4 py-3 flex flex-col gap-2.5">
+                                <div className="flex items-center gap-3">
+                                    <span className={`text-sm ${phase === 1 ? '' : 'opacity-40'}`}>🟡</span>
+                                    <div className="flex-1">
+                                        <div className={`text-xs font-semibold ${phase === 1 ? 'text-yellow-400' : 'text-gray-600'}`}>Toss → T-15</div>
+                                        <div className={`text-[11px] mt-0.5 ${phase === 1 ? 'text-gray-400' : 'text-gray-600'}`}>Join now to draft live</div>
+                                    </div>
+                                    {phase === 1 && <span className="text-[10px] text-yellow-400 bg-yellow-500/10 px-2 py-0.5 rounded-full font-semibold">NOW</span>}
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className={`text-sm ${phase === 2 ? '' : 'opacity-40'}`}>🟠</span>
+                                    <div className="flex-1">
+                                        <div className={`text-xs font-semibold ${phase === 2 ? 'text-orange-400' : 'text-gray-600'}`}>T-15 → T-5</div>
+                                        <div className={`text-[11px] mt-0.5 ${phase === 2 ? 'text-gray-400' : 'text-gray-600'}`}>Draft auto-continues</div>
+                                    </div>
+                                    {phase === 2 && <span className="text-[10px] text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full font-semibold">NOW</span>}
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className={`text-sm ${phase === 3 ? '' : 'opacity-40'}`}>🔴</span>
+                                    <div className="flex-1">
+                                        <div className={`text-xs font-semibold ${phase === 3 ? 'text-red-400' : 'text-gray-600'}`}>T-5 → Start</div>
+                                        <div className={`text-[11px] mt-0.5 ${phase === 3 ? 'text-gray-400' : 'text-gray-600'}`}>Picks lock, auto-filled</div>
+                                    </div>
+                                    {phase === 3 && <span className="text-[10px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full font-semibold">NOW</span>}
+                                </div>
+                            </div>
+                            <div className="px-4 py-2.5 border-t border-gray-800 flex items-center justify-center gap-2">
+                                <span className="text-[11px] text-gray-500">Match starts in</span>
+                                <span className={`text-sm font-bold ${msLeft <= 5 * 60000 ? 'text-red-400' : msLeft <= 15 * 60000 ? 'text-yellow-400' : 'text-white'}`}>
+                                    {msLeft > 0 ? formatCountdown(msLeft) : 'Started'}
+                                </span>
+                            </div>
+                        </div>
+                    )
+                })()}
             </div>
         </div>
     )

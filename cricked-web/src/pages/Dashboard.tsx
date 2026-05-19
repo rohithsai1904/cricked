@@ -277,6 +277,47 @@ export default function Dashboard() {
                             </div>
                         )}
 
+                        {/* Draft Flow Timeline */}
+                        <div className="mb-6 bg-gray-900/60 border border-gray-800 rounded-xl p-4">
+                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                                How the Draft Works
+                            </h3>
+                            <div className="flex flex-col gap-3">
+                                <div className="flex gap-3 items-start">
+                                    <div className="flex flex-col items-center">
+                                        <div className="w-6 h-6 rounded-full bg-green-500/20 border border-green-500/40 flex items-center justify-center text-[10px] text-green-400 font-bold shrink-0">1</div>
+                                        <div className="w-px h-full bg-gray-700 mt-1" />
+                                    </div>
+                                    <div>
+                                        <div className="text-xs font-semibold text-green-400">Toss → T-15 min</div>
+                                        <div className="text-[11px] text-gray-500 mt-0.5">Join after toss. Draft starts when both players are ready.</div>
+                                    </div>
+                                </div>
+                                <div className="flex gap-3 items-start">
+                                    <div className="flex flex-col items-center">
+                                        <div className="w-6 h-6 rounded-full bg-yellow-500/20 border border-yellow-500/40 flex items-center justify-center text-[10px] text-yellow-400 font-bold shrink-0">2</div>
+                                        <div className="w-px h-full bg-gray-700 mt-1" />
+                                    </div>
+                                    <div>
+                                        <div className="text-xs font-semibold text-yellow-400">T-15 min → T-5 min</div>
+                                        <div className="text-[11px] text-gray-500 mt-0.5">Draft keeps going. Auto-pick covers you if your opponent goes offline.</div>
+                                    </div>
+                                </div>
+                                <div className="flex gap-3 items-start">
+                                    <div className="flex flex-col items-center">
+                                        <div className="w-6 h-6 rounded-full bg-red-500/20 border border-red-500/40 flex items-center justify-center text-[10px] text-red-400 font-bold shrink-0">3</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs font-semibold text-red-400">T-5 min → Match Start</div>
+                                        <div className="text-[11px] text-gray-500 mt-0.5">Draft locks. Any unpicked slots are auto-filled from your pre-draft list.</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="mt-3 text-[10px] text-gray-600 text-center">
+                                T = Match start time
+                            </div>
+                        </div>
+
                         <h2 className="text-lg font-semibold mb-4">Upcoming Matches</h2>
                         {loading && <p className="text-gray-500 text-sm">Loading matches...</p>}
                         {!loading && matches.length === 0 && <p className="text-gray-500 text-sm">No upcoming matches.</p>}
@@ -359,7 +400,11 @@ export default function Dashboard() {
                                             Match Live
                                         </h2>
                                         <div className="flex flex-col gap-3">
-                                            {picked.map(room => (
+                                            {picked.map(room => {
+                                                const myScore = room.player1Id._id === currentUserId ? room.player1Score : room.player2Score
+                                                const oppScore = room.player1Id._id === currentUserId ? room.player2Score : room.player1Score
+                                                const leading = myScore > oppScore ? 'text-green-400' : myScore < oppScore ? 'text-red-400' : 'text-yellow-400'
+                                                return (
                                                 <div key={room._id} className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden hover:border-green-500/30 transition">
                                                     <div className="bg-green-500/5 border-b border-gray-800 px-5 py-3 flex items-center justify-between">
                                                         <span className="text-sm font-semibold text-white">{room.matchId.teamHome} vs {room.matchId.teamAway}</span>
@@ -375,10 +420,17 @@ export default function Dashboard() {
                                                                 <div className="text-[10px] text-green-400 mt-0.5">Picks locked · Live now 🔴</div>
                                                             </div>
                                                         </div>
-                                                        <button onClick={() => navigate(`/room/${room._id}/result`)} className="bg-green-600 hover:bg-green-500 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition shadow-lg shadow-green-500/20">View Picks</button>
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="text-right">
+                                                                <div className={`text-lg font-bold ${leading}`}>{myScore} <span className="text-gray-600">-</span> {oppScore}</div>
+                                                                <div className="text-[9px] text-gray-500 uppercase tracking-wide">pts</div>
+                                                            </div>
+                                                            <button onClick={() => navigate(`/room/${room._id}/result`)} className="bg-green-600 hover:bg-green-500 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition shadow-lg shadow-green-500/20">Scorecard</button>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            ))}
+                                                )
+                                            })}
                                         </div>
                                     </div>
                                 )}
