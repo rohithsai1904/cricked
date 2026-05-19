@@ -52,19 +52,6 @@ export default function RoomDetails() {
         </div>
     )
 
-    const opponent =
-        room.player1Id?.username && room.player2Id?.username
-            ? room.player1Id._id === room.player2Id._id
-                ? room.player1Id.username
-                : room.player1Id.username // will figure out which is opponent below
-            : 'Waiting...'
-
-    const getOpponentName = () => {
-        if (!room.player1Id || !room.player2Id) return 'Waiting...'
-        // The GET /rooms/:id populates both players, we need to know who "we" are
-        // We'll show both and highlight opponent
-        return `${room.player1Id.username} vs ${room.player2Id.username}`
-    }
 
     const renderList = (title: string, entries: PreDraftEntry[]) => {
         if (entries.length === 0) return null
