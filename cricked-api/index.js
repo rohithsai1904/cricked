@@ -22,12 +22,20 @@ const setupDraft = require('./sockets/draft')
 const app = express()
 const server = http.createServer(app)
 const io = new Server(server, {
-    cors: { origin: '*' }
+    cors: {
+        origin: process.env.CLIENT_URL || '*',
+        methods: ['GET', 'POST'],
+        credentials: true
+    },
+    transports: ['websocket', 'polling']
 })
 
 connectDB()
 
-app.use(cors())
+app.use(cors({
+    origin: process.env.CLIENT_URL || '*',
+    credentials: true
+}))
 app.use(express.json())
 app.use(passport.initialize())       // ← no passport.session()
 
