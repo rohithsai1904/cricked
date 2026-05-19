@@ -123,8 +123,7 @@ export default function LiveDraft() {
     // Connect socket
     useEffect(() => {
         const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:3001', {
-            transports: ['websocket', 'polling'],
-            withCredentials: true
+            transports: ['websocket', 'polling']
         })
         socketRef.current = socket
 

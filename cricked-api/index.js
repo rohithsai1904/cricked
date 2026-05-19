@@ -23,17 +23,26 @@ const app = express()
 const server = http.createServer(app)
 const io = new Server(server, {
     cors: {
-        origin: process.env.CLIENT_URL || '*',
-        methods: ['GET', 'POST'],
-        credentials: true
+        origin: '*',
+        methods: ['GET', 'POST']
     },
     transports: ['websocket', 'polling']
 })
 
 connectDB()
 
+const allowedOrigins = process.env.CLIENT_URL
+    ? process.env.CLIENT_URL.split(',')
+    : ['http://localhost:5173']
+
 app.use(cors({
-    origin: process.env.CLIENT_URL || '*',
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true)
+        } else {
+            callback(null, true) // allow all for now, tighten later
+        }
+    },
     credentials: true
 }))
 app.use(express.json())
